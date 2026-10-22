@@ -40,7 +40,7 @@ class SACBCAgent(nn.Module):
         self.target_update_rate = target_update_rate
         self.alpha = alpha
 
-        self.target_entropy = -action_dim / 2  # Heuristic value (|A| / 2) from the SAC paper.
+        self.target_entropy = -action_dim / 2 
 
     def get_action(self, observation: np.ndarray):
         """
@@ -63,9 +63,14 @@ class SACBCAgent(nn.Module):
         """
         Update Q(s, a)
         """
-        # TODO(student): Compute the Q loss
-        q = ...
-        loss = ...
+        with torch.no_grad():
+            next_dist = self.actor(next_observations)
+            next_actions = next_dist.rsample()
+            next_q = self.target_critic(next_observations, next_actions).mean(dim=0)
+            target_q = rewards + self.discount * (1 - dones) * next_q
+
+        q = self.critic(observations, actions) 
+        loss = ((q - target_q.unsqueeze(0)) ** 2).mean()
 
         self.critic_optimizer.zero_grad()
         loss.backward()
@@ -87,13 +92,17 @@ class SACBCAgent(nn.Module):
         """
         Update the actor
         """
-        # TODO(student): Compute the actor loss
-        q_loss = ...
+        actor_dist = self.actor(observations)
+        actor_actions = actor_dist.rsample()
+        log_probs = actor_dist.log_prob(actor_actions)
 
-        mses = ...
-        bc_loss = ...
+        q_values = self.critic(observations, actor_actions).mean(dim=0)
+        q_loss = -q_values.mean()
 
-        entropy_loss = ...
+        mses = (actor_actions - actions) ** 2
+        bc_loss = self.alpha * mses.mean()
+
+        entropy_loss = self.beta() * log_probs.mean()
 
         loss = q_loss + bc_loss + entropy_loss
 
@@ -155,5 +164,7 @@ class SACBCAgent(nn.Module):
         return metrics
 
     def update_target_critic(self) -> None:
-        # TODO(student): Update target_critic using Polyak averaging with self.target_update_rate
-        ...
+        for param, target_param in zip(self.critic.parameters(), self.target_critic.parameters()):
+            target_param.data.copy_(
+                self.target_update_rate * param.data + (1 - self.target_update_rate) * target_param.data
+            )

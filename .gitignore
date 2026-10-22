@@ -1,0 +1,9 @@
+.DS_Store
+__pycache__/
+*.egg-info/
+hw5/exp/
+hw4_submission/
+hw5_submission/
+submit.zip
+*gradescope_submission.zip
+CLAUDE.md
